@@ -31,6 +31,32 @@ import securityTxt from 'express-security.txt'
 import { rateLimit } from 'express-rate-limit'
 import { getStream } from 'file-stream-rotator'
 import type { Request, Response, NextFunction } from 'express'
+import { validateAndSanitizeUserInput, hashPassword } from './utils/security';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import dotenv from 'dotenv';
+
+// Import security utilities 
+import { verifyToken } from './utils/security';
+
+dotenv.config();
+
+const app = express();
+
+// ======================
+// ADD THESE SECURITY MEASURES HERE
+// ======================
+app.use(helmet());   // ← Security headers
+
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Too many requests, please try again later.'
+});
+app.use(limiter);
+
+app.use(express.json({ limit: '1mb' })); 
 
 import { sequelize, createSequelize, initModels, setSequelize } from './models'
 import { UserModel } from './models/user'
@@ -126,6 +152,7 @@ import { serveCodeSnippet, checkVulnLines } from './routes/vulnCodeSnippet'
 import { orderHistory, allOrders, toggleDeliveryStatus } from './routes/orderHistory'
 import { continueCode, continueCodeFindIt, continueCodeFixIt } from './routes/continueCode'
 import { ensureFileIsPassed, handleZipFileUpload, checkUploadSize, checkFileType, handleXmlUpload, handleYamlUpload } from './routes/fileUpload'
+import { secureLogin } from 'routes/secureLogin'
 
 const app = express()
 const server = new http.Server(app)
@@ -403,22 +430,37 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
-  /* User registration challenge verifications before finale takes over */
-  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
-    if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
-      if (req.body.email.length !== 0 && req.body.password.length !== 0) {
-        req.body.email = req.body.email.trim()
-        req.body.password = req.body.password.trim()
-        req.body.passwordRepeat = req.body.passwordRepeat.trim()
-      } else {
-        res.status(400).send(res.__('Invalid email/password cannot be empty'))
-      }
+  // ======================
+// WEEK 2: INPUT VALIDATION + PASSWORD HASHING
+// ======================
+app.post('/api/Users', async (req: any, res: any, next: any) => {
+    try {
+        const { sanitized, errors } = validateAndSanitizeUserInput(req.body);
+        
+        if (errors.length > 0) {
+            return res.status(400).json({ 
+                status: 'error',
+                errors: errors 
+            });
+        }
+
+        // Hash the password using bcrypt
+        const hashedPassword = await hashPassword(sanitized.password);
+        req.body.password = hashedPassword;
+        req.body.passwordRepeat = hashedPassword;   // For internal validation
+
+        next();
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Validation error' });
     }
-    next()
-  })
-  app.post('/api/Users', verify.registerAdminChallenge())
-  app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
-  app.post('/api/Users', verify.emptyUserRegistration())
+});
+
+// Existing Juice Shop registration code continues below...
+app.post('/api/Users', verify.registerAdminChallenge())
+app.post('/api/Users', verify.passwordRepeatChallenge())
+... (rest remains same)
+ 
   /* Unauthorized users are not allowed to access B2B API */
   app.use('/b2b/v2', security.isAuthorized())
   /* Check if the quantity is available in stock and limit per user not exceeded, then add item to basket */
@@ -592,7 +634,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }
 
   /* Custom Restful API */
-  app.post('/rest/user/login', login())
+  app.post('/rest/user/login', secureLogin())
   app.get('/rest/user/change-password', utils.asyncHandler(changePassword()))
   app.post('/rest/user/reset-password', utils.asyncHandler(resetPassword()))
   app.get('/rest/user/security-question', utils.asyncHandler(securityQuestion()))
@@ -663,6 +705,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Routes for profile page */
   app.get('/profile', security.updateAuthenticatedUsers(), utils.asyncHandler(getUserProfile()))
+  // ======================
+// WEEK 2: TOKEN-BASED AUTHENTICATION (JWT)
+// Protected Route Example
+// ======================
+app.get('/api/security/profile', verifyToken, (req: any, res: any) => {
+    res.status(200).json({
+        success: true,
+        message: '✅ JWT Authentication is working! This is a protected route.',
+        user: req.user,
+        timestamp: new Date().toISOString()
+    })
+})
   app.post('/profile', utils.asyncHandler(updateUserProfile()))
 
   /* Route for vulnerable code snippets */
@@ -765,6 +819,7 @@ export function close (exitCode: number | undefined) {
     process.exit(exitCode)
   }
 }
+
 // vuln-code-snippet end exposedMetricsChallenge
 
 export async function createApp (options?: { inMemoryDb?: boolean }) {
