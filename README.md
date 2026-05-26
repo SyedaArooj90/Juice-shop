@@ -68,7 +68,7 @@ The internship was divided into 3 weeks:
 - `FINAL_REPORT.md`
 - Enhanced `server.ts`
 
-**Report:** [FINAL_REPORT.md](FINAL_REPORT.md)
+**Report:** [Week 3 Report](Week%203%20Advance%20Security.pdf)
 
 ---
 
@@ -84,6 +84,3 @@ The internship was divided into 3 weeks:
 | Structured Logging          | Yes         | Winston               |
 | Penetration Testing         | Yes         | Nmap + Manual         |
 
----
-
-## 📁 Project Structure (Important Files)
