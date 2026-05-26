@@ -39,7 +39,7 @@ The internship was divided into 3 weeks:
   - Information Disclosure
 - Documented findings with screenshots and evidence
 
-**Report:** [Vulnerability Assessment Report](Juice%20shop%20Vulnerability%20Assessment.pdf)
+**Report:** [Vulnerability Assessment Report](reports/Juice%20shop%20Vulnerability%20Assessment.pdf)
 
 ---
 
@@ -51,7 +51,7 @@ The internship was divided into 3 weeks:
 - Implemented **Rate Limiting** to prevent brute-force attacks
 - Created custom security utilities (`utils/security.ts`)
 
-**Report:** [Week 2 Report](Week%202%20Implementing%20Security%20Measures.pdf)
+**Report:** [Week 2 Report](reports/Week%202%20Implementing%20Security%20Measures.pdf)
 
 ---
 
@@ -68,7 +68,7 @@ The internship was divided into 3 weeks:
 - `FINAL_REPORT.md`
 - Enhanced `server.ts`
 
-**Report:** [Week 3 Report](Week%203%20Advance%20Security.pdf)
+**Report:** [Week 3 Report](reports/Week%203%20Advance%20Security.pdf)
 
 ---
 
