@@ -2,61 +2,77 @@
  * Copyright (c) 2014-2026 Bjoern Kimminich & the OWASP Juice Shop contributors.
  * SPDX-License-Identifier: MIT
  */
-import i18n from 'i18n'
-import cors from 'cors'
-import fs from 'node:fs'
-import yaml from 'js-yaml'
-import config from 'config'
-import morgan from 'morgan'
-import multer from 'multer'
-import helmet from 'helmet'
-import http from 'node:http'
-import path from 'node:path'
-import express from 'express'
-import colors from 'colors/safe'
-import serveIndex from 'serve-index'
-import bodyParser from 'body-parser'
-// @ts-expect-error FIXME due to non-existing type definitions for finale-rest
-import * as finale from 'finale-rest'
-import compression from 'compression'
-// @ts-expect-error FIXME due to non-existing type definitions for express-robots-txt
-import robots from 'express-robots-txt'
-import cookieParser from 'cookie-parser'
-import * as Prometheus from 'prom-client'
-import swaggerUi from 'swagger-ui-express'
-import featurePolicy from 'feature-policy'
-import { IpFilter } from 'express-ipfilter'
-// @ts-expect-error FIXME due to non-existing type definitions for express-security.txt
-import securityTxt from 'express-security.txt'
-import { rateLimit } from 'express-rate-limit'
-import { getStream } from 'file-stream-rotator'
-import type { Request, Response, NextFunction } from 'express'
-import { validateAndSanitizeUserInput, hashPassword } from './utils/security';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
+import logger from './utils/logger';        // ← Your Winston logger (keep this)
 
-// Import security utilities 
+import i18n from 'i18n';
+import cors from 'cors';
+import fs from 'node:fs';
+import yaml from 'js-yaml';
+import config from 'config';
+import morgan from 'morgan';
+import multer from 'multer';
+import http from 'node:http';
+import path from 'node:path';
+import express from 'express';
+import colors from 'colors/safe';
+import serveIndex from 'serve-index';
+import bodyParser from 'body-parser';
+// @ts-expect-error FIXME due to non-existing type definitions for finale-rest
+import * as finale from 'finale-rest';
+import compression from 'compression';
+// @ts-expect-error FIXME due to non-existing type definitions for express-robots-txt
+import robots from 'express-robots-txt';
+import cookieParser from 'cookie-parser';
+import * as Prometheus from 'prom-client';
+import swaggerUi from 'swagger-ui-express';
+import featurePolicy from 'feature-policy';
+import { IpFilter } from 'express-ipfilter';
+// @ts-expect-error FIXME due to non-existing type definitions for express-security.txt
+import securityTxt from 'express-security.txt';
+import { getStream } from 'file-stream-rotator';
+import type { Request, Response, NextFunction } from 'express';
+
+import { validateAndSanitizeUserInput, hashPassword } from './utils/security';
 import { verifyToken } from './utils/security';
 
 dotenv.config();
 
 const app = express();
+const server = new http.Server(app);
+
+const PORT = process.env.PORT || config.get('server.port') || 3000;
 
 // ======================
-// ADD THESE SECURITY MEASURES HERE
+// WEEK 3: SECURITY & WINSTON LOGGING
 // ======================
-app.use(helmet());   // ← Security headers
 
-// Rate limiting
+app.use(helmet());
+
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    message: 'Too many requests, please try again later.'
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);
 
-app.use(express.json({ limit: '1mb' })); 
+// Global Error Handler
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  logger.error('Unhandled Application Error', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method
+  });
+  res.status(500).json({ message: 'Internal Server Error' });
+});
+
+// Start Server
+server.listen(PORT, () => {
+  logger.info(`🚀 Server started successfully on port ${PORT}`);
+});
 
 import { sequelize, createSequelize, initModels, setSequelize } from './models'
 import { UserModel } from './models/user'
@@ -76,7 +92,7 @@ import { SecurityAnswerModel } from './models/securityAnswer'
 import { PrivacyRequestModel } from './models/privacyRequests'
 import { SecurityQuestionModel } from './models/securityQuestion'
 
-import logger from './lib/logger'
+
 import * as utils from './lib/utils'
 import * as antiCheat from './lib/antiCheat'
 import * as security from './lib/insecurity'
@@ -154,8 +170,7 @@ import { continueCode, continueCodeFindIt, continueCodeFixIt } from './routes/co
 import { ensureFileIsPassed, handleZipFileUpload, checkUploadSize, checkFileType, handleXmlUpload, handleYamlUpload } from './routes/fileUpload'
 import { secureLogin } from 'routes/secureLogin'
 
-const app = express()
-const server = new http.Server(app)
+
 
 // errorhandler requires us from overwriting a string property on it's module which is a big no-no with esmodules :/
 
@@ -445,7 +460,7 @@ app.post('/api/Users', async (req: any, res: any, next: any) => {
         }
 
         // Hash the password using bcrypt
-        const hashedPassword = await hashPassword(sanitized.password);
+        const hashedPassword = await hashPassword(sanitized.password!);
         req.body.password = hashedPassword;
         req.body.passwordRepeat = hashedPassword;   // For internal validation
 
@@ -459,7 +474,7 @@ app.post('/api/Users', async (req: any, res: any, next: any) => {
 // Existing Juice Shop registration code continues below...
 app.post('/api/Users', verify.registerAdminChallenge())
 app.post('/api/Users', verify.passwordRepeatChallenge())
-... (rest remains same)
+
  
   /* Unauthorized users are not allowed to access B2B API */
   app.use('/b2b/v2', security.isAuthorized())
